@@ -8,7 +8,14 @@
 import scrapy
 
 
-class MetronewsItem(scrapy.Item):
-    # define the fields for your item here like:
-    # name = scrapy.Field()
-    pass
+class MetroNewsItem(scrapy.Item):
+    title = scrapy.Field()
+    datetime = scrapy.Field()
+    summary_pic_url = scrapy.Field()
+    summary_content = scrapy.Field()
+    source_tags = scrapy.Field()  # format like: 新民头条-新民突发
+    source = scrapy.Field()  # format like: 新民晚报
+    journalist = scrapy.Field()
+    editor = scrapy.Field()
+    detailed_content = scrapy.Field()
+    detailed_pic_urls = scrapy.Field()
