@@ -110,9 +110,12 @@ class XinMinSpider(scrapy.Spider):
 
         # get content and image urls
         content_box_p = article_box.xpath(CONTENT_BOX_FIND_PATENT)
-        messages_p = content_box_p.xpath('p/text()').extract()
+        messages_p = content_box_p.xpath('p[not(@*)]/text()').extract()
         images_p = content_box_p.xpath('p[@align="center"]/img/@src').extrac()
-        item['detailed_content'] =
+        item['detailed_content'] = '\n'.join(messages_p)
+        item['detailed_pic_urls'] = images_p
+
+        yield item
 
 
 
