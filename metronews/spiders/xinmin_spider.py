@@ -44,7 +44,7 @@ RE_EDITOR_PATENT = re.compile(r'编辑：(.*)')
 class XinMinSpider(scrapy.Spider):
     name = 'xinmin'  # this spider name, should unique in this project
 
-    def start_request(self):
+    def start_requests(self):
         urls = XINMIN_URLS
         for url in urls:
             yield scrapy.Request(url=url, callback=self.page_parse)
