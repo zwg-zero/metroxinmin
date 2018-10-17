@@ -17,9 +17,28 @@ XINMIN_URLS = [
     'http://newsxmwb.xinmin.cn/xinminyx/pc/',  # 头条 => 新民印象
     'http://newsxmwb.xinmin.cn/chengsh/pc/',  # 民生  => 城市生活
 ]
+
+# xpath find elements string
+# in summary page
 PAGES_FIND_PATENT = '//div[@class="fenye"]/div[@class="pageBox"]/a/@href'  # xpath to find the fenye div
 SUMMARY_FIND_PATENT = '//div[@class="type_content_list"]/div'
+SUMMARY_PIC_URL_FIND_PATENT = 'a/img/@src'
+URL_FIND_PATENT = 'div/a/@href'
+TITLE_FIND_PATENT = 'div/a/text()'
+SUMMARY_CONTENT_FIND_PATENT = 'div/p/text()'
+DATETIME_FIND_PATENT = 'div/div/span/text()'
+
+# in detailed page
 DETAIL_FIND_PATENT = '//div[@class="PageCore"]/div[@class="Cleft"]'
+ARTICLE_FIND_PATENT = 'div[@class="ArticleBox"]'
+INFO_FIND_PATENT = 'div[@class="info"]/span'
+SOURCE_TAGS_FIND_PATENT = 'div[@class="Mbx"]/text()'
+CONTENT_BOX_FIND_PATENT = 'div[@class="a_content"]/p'
+
+# source, editor, journalist find re patent
+RE_SOURCE_PATENT = re.compile(r'来源：(.*)')
+RE_JOURNALIST_PATENT = re.compile(r'记者：(.*)')
+RE_EDITOR_PATENT = re.compile(r'编辑：(.*)')
 
 
 class XinMinSpider(scrapy.Spider):
@@ -44,7 +63,7 @@ class XinMinSpider(scrapy.Spider):
         # get ride of duplicated page url and return full url of page
         pages_full_urls = self.make_unique_urls(response, pages_short_urls)
         for full_url in pages_full_urls:
-            yield scrapy.Request(full_url, callable=self.summary_parse)
+            yield scrapy.Request(full_url, callback=self.summary_parse)
 
     @staticmethod
     def make_unique_urls(response, url_list):
@@ -60,11 +79,11 @@ class XinMinSpider(scrapy.Spider):
         news_list_div = response.selector.xpath(SUMMARY_FIND_PATENT)
         for news_div in news_list_div:
             news_item = MetroNewsItem()
-            news_item['summary_pic_url'] = news_div.xpath('a/img/@src').extract()
-            news_item['title'] = news_div.xpath('div/a/text()').extract()
-            url = news_div.xpath('div/a/@href').extract()
-            news_item['summary_content'] = news_div.xpath('div/p/text()').extract()
-            news_item['datetime'] = news_div.xpath('div/div/span/text()').extract()
+            news_item['summary_pic_url'] = news_div.xpath(SUMMARY_PIC_URL_FIND_PATENT).extract()
+            news_item['title'] = news_div.xpath(TITLE_FIND_PATENT).extract()
+            url = news_div.xpath(URL_FIND_PATENT).extract()
+            news_item['summary_content'] = news_div.xpath(SUMMARY_CONTENT_FIND_PATENT).extract()
+            news_item['datetime'] = news_div.xpath(DATETIME_FIND_PATENT).extract()
             yield scrapy.Request(url, callback=self.detail_parse, meta=news_item)
 
     def detail_parse(self, response):
@@ -73,24 +92,26 @@ class XinMinSpider(scrapy.Spider):
         news_page_core = response.selector.xpath(DETAIL_FIND_PATENT)
 
         # get source_tags string
-        item['source_tags'] = news_page_core.xpath('div[@class="Mbx"]/text()').extract().replace("您现在的位置：首页 >", '')
+        item['source_tags'] = news_page_core.xpath(SOURCE_TAGS_FIND_PATENT).extract().replace("您现在的位置：首页 >", '')
 
-        article_box = news_page_core.xpath('div[@class="ArticleBox"]')
+        article_box = news_page_core.xpath(ARTICLE_FIND_PATENT)
         # get source, journalist and editor
-        info_list = article_box.xpath('div[@class="info"]/span').extract()
+        info_list = article_box.xpath(INFO_FIND_PATENT).extract()
         for each_info in info_list:
-            source_match = re.match(r'来源：(.*)', each_info)
+            source_match = re.match(RE_SOURCE_PATENT, each_info)
             if source_match:
                 item['source'] = source_match.group(1)
-            journalist_match = re.match(r'记者：', each_info)
+            journalist_match = re.match(RE_JOURNALIST_PATENT, each_info)
             if journalist_match:
                 item['journalist'] = source_match.group(1)
-            editor_match = re.match(r'编辑：', each_info)
+            editor_match = re.match(RE_EDITOR_PATENT, each_info)
             if editor_match:
                 item['editor'] = source_match.group(1)
 
         # get content and image urls
-        content_box_p = article_box.xpath('div[@class="a_content"]/p')
+        content_box_p = article_box.xpath(CONTENT_BOX_FIND_PATENT)
+        messages_p = content_box_p.xpath('p/text()').extract()
+        images_p = content_box_p.xpath('p[@align="center"]/img/@src').extrac()
         item['detailed_content'] =
 
 
