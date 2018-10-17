@@ -7,6 +7,7 @@
 import scrapy
 import logging
 from ..items import MetroNewsItem
+import re
 
 
 # start urls to get news from
@@ -17,10 +18,11 @@ XINMIN_URLS = [
     'http://newsxmwb.xinmin.cn/chengsh/pc/',  # 民生  => 城市生活
 ]
 PAGES_FIND_PATENT = '//div[@class="fenye"]/div[@class="pageBox"]/a/@href'  # xpath to find the fenye div
-SUMMERY_FIND_PATENT = '//div[@class="type_content_list"]/div'
+SUMMARY_FIND_PATENT = '//div[@class="type_content_list"]/div'
+DETAIL_FIND_PATENT = '//div[@class="PageCore"]/div[@class="Cleft"]'
 
 
-class XinMinSpider(scrapy.Spide):
+class XinMinSpider(scrapy.Spider):
     name = 'xinmin'  # this spider name, should unique in this project
 
     def start_request(self):
@@ -55,7 +57,7 @@ class XinMinSpider(scrapy.Spide):
 
     def summary_parse(self, response):
         # extract news summary
-        news_list_div = response.selector.xpath(SUMMERY_FIND_PATENT)
+        news_list_div = response.selector.xpath(SUMMARY_FIND_PATENT)
         for news_div in news_list_div:
             news_item = MetroNewsItem()
             news_item['summary_pic_url'] = news_div.xpath('a/img/@src').extract()
@@ -66,7 +68,37 @@ class XinMinSpider(scrapy.Spide):
             yield scrapy.Request(url, callback=self.detail_parse, meta=news_item)
 
     def detail_parse(self, response):
+        item = response.meta
         # extract news detail
+        news_page_core = response.selector.xpath(DETAIL_FIND_PATENT)
+
+        # get source_tags string
+        item['source_tags'] = news_page_core.xpath('div[@class="Mbx"]/text()').extract().replace("您现在的位置：首页 >", '')
+
+        article_box = news_page_core.xpath('div[@class="ArticleBox"]')
+        # get source, journalist and editor
+        info_list = article_box.xpath('div[@class="info"]/span').extract()
+        for each_info in info_list:
+            source_match = re.match(r'来源：(.*)', each_info)
+            if source_match:
+                item['source'] = source_match.group(1)
+            journalist_match = re.match(r'记者：', each_info)
+            if journalist_match:
+                item['journalist'] = source_match.group(1)
+            editor_match = re.match(r'编辑：', each_info)
+            if editor_match:
+                item['editor'] = source_match.group(1)
+
+        # get content and image urls
+        content_box_p = article_box.xpath('div[@class="a_content"]/p')
+        item['detailed_content'] =
+
+
+
+
+
+
+
 
 
 
