@@ -6,10 +6,11 @@
 
 import scrapy
 import logging
-from ..items import MetroNewsItem
 import re
 from datetime import datetime as dt
 from datetime import timedelta
+
+from ..items import MetroNewsItem
 
 # start urls to get news from
 XINMIN_URLS = [
