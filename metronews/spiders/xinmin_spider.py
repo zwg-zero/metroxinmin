@@ -8,7 +8,8 @@ import scrapy
 import logging
 from ..items import MetroNewsItem
 import re
-
+from datetime import datetime as dt
+from datetime import timedelta
 
 # start urls to get news from
 XINMIN_URLS = [
@@ -20,25 +21,26 @@ XINMIN_URLS = [
 
 # xpath find elements string
 # in summary page
-PAGES_FIND_PATENT = '//div[@class="fenye"]/div[@class="pageBox"]/a/@href'  # xpath to find the fenye div
-SUMMARY_FIND_PATENT = '//div[@class="type_content_list"]/div'
+PAGES_FIND_PATENT = '//div[normalize-space(@class)="fenye clearfix"]/div[normalize-space(@class)="pageBox"]/a/@href'  # xpath to find the fenye div
+SUMMARY_FIND_PATENT = '//div[normalize-space(@class)="type_content_list type-item"]/div'
 SUMMARY_PIC_URL_FIND_PATENT = 'a/img/@src'
-URL_FIND_PATENT = 'div/a/@href'
+URL_FIND_PATENT = 'a/@href'
 TITLE_FIND_PATENT = 'div/a/text()'
 SUMMARY_CONTENT_FIND_PATENT = 'div/p/text()'
-DATETIME_FIND_PATENT = 'div/div/span/text()'
+DATETIME_FIND_PATENT = 'div/div[@class="info"]/span'
 
 # in detailed page
-DETAIL_FIND_PATENT = '//div[@class="PageCore"]/div[@class="Cleft"]'
-ARTICLE_FIND_PATENT = 'div[@class="ArticleBox"]'
-INFO_FIND_PATENT = 'div[@class="info"]/span'
-SOURCE_TAGS_FIND_PATENT = 'div[@class="Mbx"]/text()'
-CONTENT_BOX_FIND_PATENT = 'div[@class="a_content"]/p'
-
+DETAIL_FIND_PATENT = '//div[normalize-space(@class)="PageCore"]/div[normalize-space(@class)="Cleft"]'
+ARTICLE_FIND_PATENT = 'div[normalize-space(@class)="ArticleBox"]'
+INFO_FIND_PATENT = 'div[normalize-space(@class)="info"]/span/text()'
+SOURCE_TAGS_FIND_PATENT = 'div[normalize-space(@class)="Mbx"]/text()'
+CONTENT_BOX_FIND_PATENT = 'div[normalize-space(@class)="a_content"]/p'
+CONTENT_LEN_MIN = 30  # when filter detailed news p element, if length of message less than this value, will be delete
 # source, editor, journalist find re patent
 RE_SOURCE_PATENT = re.compile(r'来源：(.*)')
 RE_JOURNALIST_PATENT = re.compile(r'记者：(.*)')
 RE_EDITOR_PATENT = re.compile(r'编辑：(.*)')
+RE_DATETIME_FIND_PATENT = re.compile(r'.*(\d\d\d\d-\d\d-\d\d \d\d:\d\d).*')
 
 
 class XinMinSpider(scrapy.Spider):
@@ -67,7 +69,7 @@ class XinMinSpider(scrapy.Spider):
 
     @staticmethod
     def make_unique_urls(response, url_list):
-        url_set = set(*url_list)
+        url_set = set(url_list)
         url_unique_list = []
         for short_url in url_set:
             base_url = response.request.url
@@ -79,11 +81,28 @@ class XinMinSpider(scrapy.Spider):
         news_list_div = response.selector.xpath(SUMMARY_FIND_PATENT)
         for news_div in news_list_div:
             news_item = MetroNewsItem()
-            news_item['summary_pic_url'] = news_div.xpath(SUMMARY_PIC_URL_FIND_PATENT).extract()
-            news_item['title'] = news_div.xpath(TITLE_FIND_PATENT).extract()
-            url = news_div.xpath(URL_FIND_PATENT).extract()
-            news_item['summary_content'] = news_div.xpath(SUMMARY_CONTENT_FIND_PATENT).extract()
-            news_item['datetime'] = news_div.xpath(DATETIME_FIND_PATENT).extract()
+            news_item['summary_pic_url'] = news_div.xpath(SUMMARY_PIC_URL_FIND_PATENT).extract_first()
+            news_item['title'] = news_div.xpath(TITLE_FIND_PATENT).extract_first()
+            url = news_div.xpath(URL_FIND_PATENT).extract_first()
+            news_item['summary_content'] = news_div.xpath(SUMMARY_CONTENT_FIND_PATENT).extract_first().strip()
+
+            # get datetime
+            datetime_spans = news_div.xpath(DATETIME_FIND_PATENT)
+            if datetime_spans:
+                datetime = datetime_spans[-1].xpath('text()').extract_first()
+                if not datetime:
+                    raise ValueError('parse datetime error, not get datetime')
+                # assert datetime get is really a datetime
+                if not re.match(RE_DATETIME_FIND_PATENT, datetime):
+                    raise ValueError("datetime error, parse error, get: %s" % datetime)
+                # compare datetime with latest news date we already have to filter only newer news we would process
+                # you should change the below according to your situation
+                if dt.strptime(datetime, "%Y-%m-%d %H:%M") < dt.now() - timedelta(days=1):
+                    continue
+                news_item['datetime'] = datetime.strip()
+
+            else:
+                raise ValueError('Not find the datetime.')
             yield scrapy.Request(url, callback=self.detail_parse, meta=news_item)
 
     def detail_parse(self, response):
@@ -92,28 +111,45 @@ class XinMinSpider(scrapy.Spider):
         news_page_core = response.selector.xpath(DETAIL_FIND_PATENT)
 
         # get source_tags string
-        item['source_tags'] = news_page_core.xpath(SOURCE_TAGS_FIND_PATENT).extract().replace("您现在的位置：首页 >", '')
+        source_tag_text = news_page_core.xpath(SOURCE_TAGS_FIND_PATENT).extract_first()
+        if source_tag_text:
+            item['source_tags'] = source_tag_text.replace("您现在的位置：首页 >", '').strip().replace(">", '')
 
         article_box = news_page_core.xpath(ARTICLE_FIND_PATENT)
-        # get source, journalist and editor
+        # get source, journalist, editor and datetime
         info_list = article_box.xpath(INFO_FIND_PATENT).extract()
         for each_info in info_list:
             source_match = re.match(RE_SOURCE_PATENT, each_info)
             if source_match:
                 item['source'] = source_match.group(1)
+                continue
             journalist_match = re.match(RE_JOURNALIST_PATENT, each_info)
             if journalist_match:
-                item['journalist'] = source_match.group(1)
+                item['journalist'] = journalist_match.group(1)
+                continue
             editor_match = re.match(RE_EDITOR_PATENT, each_info)
             if editor_match:
-                item['editor'] = source_match.group(1)
+                item['editor'] = editor_match.group(1)
+            #    continue
+            # date_time_match = re.match(RE_DATETIME_FIND_PATENT, each_info)
+            # if date_time_match:
+            #     item['datetime'] = date_time_match.group(1)
 
         # get content and image urls
+        item['detailed_pic_urls'] = []
+        item['detailed_content'] = ''
         content_box_p = article_box.xpath(CONTENT_BOX_FIND_PATENT)
-        messages_p = content_box_p.xpath('p[not(@*)]/text()').extract()
-        images_p = content_box_p.xpath('p[@align="center"]/img/@src').extrac()
-        item['detailed_content'] = '\n'.join(messages_p)
-        item['detailed_pic_urls'] = images_p
+        for each_p in content_box_p:
+            # try to get img src
+            img_src = each_p.xpath('img/@src').extract_first()
+            if img_src:
+                item['detailed_pic_urls'].append(img_src)
+            else:
+                each_text = each_p.xpath('text()').extract_first()
+                if len(each_text) > CONTENT_LEN_MIN:
+                    # as needed message content
+                    # delete strings like <strong>
+                    item['detailed_content'] += each_text.strip()
 
         yield item
 
