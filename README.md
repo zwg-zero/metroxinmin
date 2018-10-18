@@ -1,4 +1,7 @@
 # metroxinmin
+### dependence
+* scrapy
+
 ### debug or run with pycharm
 * add start.py in folder same as scrapy.cfg (alerady added)
 * in pycharm under "run-> edit configure" add a new configure of python,

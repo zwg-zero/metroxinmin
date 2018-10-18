@@ -42,6 +42,11 @@ RE_JOURNALIST_PATENT = re.compile(r'记者：(.*)')
 RE_EDITOR_PATENT = re.compile(r'编辑：(.*)')
 RE_DATETIME_FIND_PATENT = re.compile(r'.*(\d\d\d\d-\d\d-\d\d \d\d:\d\d).*')
 
+# filter news which content contain special words
+RE_WORDS_FILTER = re.compile(r'[mM]etro|[Ss]ubway|地铁')
+# only get the latest 2 days, this is only for test.
+LATEST_DAYS = 2
+
 
 class XinMinSpider(scrapy.Spider):
     name = 'xinmin'  # this spider name, should unique in this project
@@ -97,7 +102,7 @@ class XinMinSpider(scrapy.Spider):
                     raise ValueError("datetime error, parse error, get: %s" % datetime)
                 # compare datetime with latest news date we already have to filter only newer news we would process
                 # you should change the below according to your situation
-                if dt.strptime(datetime, "%Y-%m-%d %H:%M") < dt.now() - timedelta(days=1):
+                if dt.strptime(datetime, "%Y-%m-%d %H:%M") < dt.now() - timedelta(days=LATEST_DAYS):
                     continue
                 news_item['datetime'] = datetime.strip()
 
@@ -150,8 +155,9 @@ class XinMinSpider(scrapy.Spider):
                     # as needed message content
                     # delete strings like <strong>
                     item['detailed_content'] += each_text.strip()
-
-        yield item
+        # filter only needed news
+        if re.search(RE_WORDS_FILTER, item['detailed_content']):
+            yield item
 
 
 
