@@ -7,8 +7,10 @@
 * in pycharm under "run-> edit configure" add a new configure of python,
 script path as start.py, working directory as folder of start.py
 
-### to list
-* process duplicated news in all get news
+### todo list
+* process duplicated news in all get news,
+some news may belong to multiple sub-news. also need to filter out dulicated news already
+got in your database with same datetime.
 * save out result into db or file
-* get latest news datetime from old get news to filter only newer news
+* get latest news datetime from already got news to filter only newer news
 
